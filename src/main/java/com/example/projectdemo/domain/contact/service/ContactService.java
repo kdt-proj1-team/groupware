@@ -49,6 +49,12 @@ public class ContactService {
         contactMapper.deleteContactsByIds(ids);
     }
 
+    /**
+     * 개인 주소록 연락처 수정
+     */
+    public void updatePersonalContact(PersonalContactDTO dto) {
+        contactMapper.updatePersonalContact(dto);
+    }
 
 
 }

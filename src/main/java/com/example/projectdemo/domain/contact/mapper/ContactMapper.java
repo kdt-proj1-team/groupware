@@ -24,4 +24,7 @@ public interface ContactMapper {
     // 개인주소록 연락처 삭제
     void deleteContactsByIds(@Param("ids") List<Integer> ids);
 
+    // 개인주소록 연락처 수정
+    void updatePersonalContact(@Param("contact") PersonalContactDTO dto);
+
 }

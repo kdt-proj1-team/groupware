@@ -16,7 +16,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 주소 추가 버튼
     document.querySelector('.add-contact-btn').addEventListener('click', function () {
-        document.getElementById('contact-modal').classList.remove('hidden');
+        const modal = document.getElementById('contact-modal');
+        modal.removeAttribute('data-mode');
+        modal.removeAttribute('data-id');
+
+        modal.classList.remove('hidden');
     });
 
     // 주소 추가 취소 버튼
@@ -67,27 +71,53 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const contactData = { name, email, phone, memo };
 
-        fetch('/api/contact/personal/add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(contactData)
-        })
-            .then(response => {
-                resetContactForm()
+        const modal = document.getElementById('contact-modal');
+        const mode = modal.getAttribute('data-mode');
 
-                if (response.status === 201) {
-                    document.getElementById('contact-modal').classList.add('hidden');
+        if (mode === 'edit') {
+            const id = modal.getAttribute('data-id');
 
-                    loadContacts('personal', 'all');
-                    updateActiveSidebarItem('personal', 'all');
-                } else {
-                    alert('저장에 실패했습니다.');
-                }
+            fetch(`/api/contact/personal/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(contactData)
             })
-            .catch(error => {
-                console.error('저장 중 오류 발생:', error);
-                alert('서버 오류로 저장에 실패했습니다.');
-            });
+                .then(res => {
+                    if (res.ok) {
+                        resetContactForm();
+                        modal.classList.add('hidden');
+                        loadContacts('personal', 'all');
+                    } else {
+                        alert('수정에 실패했습니다.');
+                    }
+                })
+                .catch(error => {
+                    console.error('수정 중 오류 발생:', error);
+                    alert('서버 오류로 수정에 실패했습니다.');
+                });
+
+        } else {
+            // 추가일 경우 기존 POST 요청 유지
+            fetch('/api/contact/personal/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(contactData)
+            })
+                .then(res => {
+                    resetContactForm();
+
+                    if (res.status === 201) {
+                        modal.classList.add('hidden');
+                        loadContacts('personal', 'all');
+                    } else {
+                        alert('저장에 실패했습니다.');
+                    }
+                })
+                .catch(error => {
+                    console.error('저장 중 오류 발생:', error);
+                    alert('서버 오류로 저장에 실패했습니다.');
+                });
+        }
     });
 
     // 개인 주소록 삭제 이벤트
@@ -131,6 +161,33 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
 
+    // 개인 주소록 상세 보기 모달 수정 버튼 이벤트리스너
+    document.getElementById('editContactBtn').addEventListener('click', function () {
+        const contact = this.contactData;
+
+        if (!contact) return;
+
+        // input에 값 세팅
+        document.getElementById('nameInput').value = contact.name || '';
+        document.getElementById('emailInput').value = contact.email || '';
+        document.getElementById('phoneInput').value = contact.phone || '';
+        document.getElementById('memoInput').value = contact.memo || '';
+        document.getElementById('char-count').textContent = contact.memo?.length || 0;
+
+        // 수정 모드로 세팅
+        const modal = document.getElementById('contact-modal');
+        modal.setAttribute('data-mode', 'edit');
+        modal.setAttribute('data-id', contact.id);
+
+        document.getElementById('saveContactBtn').textContent = '수정';
+
+        // 모달 전환
+        document.getElementById('contact-detail-modal').classList.add('hidden');
+        modal.classList.remove('hidden');
+    });
+
+
+
     // 전체 선택 체크박스 이벤트
     document.addEventListener('change', function (e) {
         if (e.target.classList.contains('select-all-checkbox')) {
@@ -160,6 +217,8 @@ function resetContactForm() {
     document.getElementById('phoneInput').value = '';
     document.getElementById('memoInput').value = '';
     document.getElementById('char-count').textContent = '0';
+    document.getElementById('saveContactBtn').textContent = '저장';
+
 }
 
 // 부서 목록 불러오기
@@ -334,6 +393,10 @@ function updateHeaderForSelection() {
     const thPhone = document.querySelector('.contact-table thead th:nth-child(4)');
     const thInfo = document.querySelector('.contact-table thead .info-col');
 
+    // 현재 탭 확인
+    const urlParams = new URLSearchParams(window.location.search);
+    const tab = urlParams.get('tab') || 'shared';
+
     if (checkedCount > 0) {
         // 나머지 헤더는 텍스트만 숨김
         thEmail.textContent = '';
@@ -346,7 +409,7 @@ function updateHeaderForSelection() {
         // 복원
         thEmail.textContent = '이메일';
         thPhone.textContent = '전화번호';
-        thInfo.textContent = '메모';
+        thInfo.textContent = (tab === 'shared') ? '부서' : '메모';
         thNameCol.textContent = '이름';
     }
 }
@@ -357,17 +420,27 @@ function openDetailModal(contact, tab) {
     setFieldVisibility('detailEmail', tab === 'shared' ? contact.internalEmail : contact.email);
     setFieldVisibility('detailPhone', contact.phone);
 
+    const editBtn = document.getElementById('editContactBtn');
+
     if (tab === 'shared') {
         document.getElementById('sharedOnly').style.display = '';
         document.getElementById('personalOnly').style.display = 'none';
 
         setFieldVisibility('detailDept', contact.depName);
         setFieldVisibility('detailPosition', contact.posTitle);
+
+        // 공유 주소록은 수정 버튼 숨김
+        editBtn.classList.add('hidden');
     } else {
         document.getElementById('sharedOnly').style.display = 'none';
         document.getElementById('personalOnly').style.display = '';
 
         setFieldVisibility('detailMemo', contact.memo);
+
+        // 개인 주소록은 수정 버튼 표시
+        editBtn.classList.remove('hidden');
+        editBtn.setAttribute('data-id', contact.id); // 수정 시 사용할 ID 저장
+        editBtn.contactData = contact;
     }
 
     document.getElementById('contact-detail-modal').classList.remove('hidden');
